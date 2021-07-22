@@ -1,11 +1,13 @@
 import socket
 
-s = socket.create_server(("localhost", 5000))
-s.listen(1)
+server = socket.create_server(("localhost", 5000))
+server.listen(1)
+def checking_len_of_name(request:str) -> bool:
+     return len(request) >= 30
 
 while True:
     print("Главный цикл")
-    conn, addr = s.accept()
+    conn, addr = server.accept()
     while True:
         data = conn.recv(1024)
         if not data:
@@ -16,4 +18,4 @@ while True:
         conn.sendall(res)
         conn.close()
         break
-s.close()
+server.close()
