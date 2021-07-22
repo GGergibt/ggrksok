@@ -8,8 +8,8 @@ while True:
     conn, addr = s.accept()
     while True:
         data = conn.recv(1024)
-        # if not data:
-        #     break
+        if not data:
+            break
         res = "НОРМАЛДЫКС РКСОК/3.0".encode()
         print(data.decode())
         # conn.send(res)
