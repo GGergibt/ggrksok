@@ -7,9 +7,18 @@ METOD = ("ОТДОВАЙ", "ЗОПИШИ", "УДОЛИ")
 
 def send_response(conn: str, response: str):
     """Функция для отправки ответа клиенту"""
-    print(response)
-    response_hard = "НОРМАЛДЫКС РКСОК/3.0".encode()
+    response_hard = "НОРМАЛДЫКС РКСОК/1.0".encode()
     conn.sendall(response_hard)
+
+
+def send_to_checking_server(res: str):
+    print(res)
+    method = "АМОЖНА? РКСОК/1.0"
+    conn = socket.create_connection(("vragi-vezde.to.digital", 51624))
+    response = f"{method}\r\n {res}\r\n\r\n".encode()
+    conn.send(response)
+    res = conn.recv(1024)
+    print(f"ОТВЕТ от ПАРТИИ: {res.decode()}")
 
 
 def checking_len_of_name(request: str) -> bool:
@@ -62,7 +71,7 @@ def run_server():
         conn, addr = server.accept()
         while True:
             res = get_request(conn)
-            print(res)
+            send_to_checking_server(res)
             send_response(conn, res)
             conn.close()
             break
