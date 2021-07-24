@@ -5,25 +5,31 @@ PROTOCOL = "РКСОК/1.0"
 METOD = ("ОТДОВАЙ", "ЗОПИШИ", "УДОЛИ")
 
 
+def send_to_checking_server(res: str) -> str:
+    method = "АМОЖНА? РКСОК/1.0"
+    conn = socket.create_connection(("vragi-vezde.to.digital", 51624))
+    response = f"{method}\r\n {res}\r\n\r\n".encode()
+    conn.send(response)
+    res = conn.recv(1024).decode()
+    parse_response_check_server(res)
+
+
+def parse_response_check_server(res: str):
+    if res.startswith("МОЖНА"):
+        print("МОЖНО")
+    else:
+        print("НЕЛЬЗЯ")
+
+
 def send_response(conn: str, response: str):
     """Функция для отправки ответа клиенту"""
     response_hard = "НОРМАЛДЫКС РКСОК/1.0".encode()
     conn.sendall(response_hard)
 
 
-def send_to_checking_server(res: str):
-    print(res)
-    method = "АМОЖНА? РКСОК/1.0"
-    conn = socket.create_connection(("vragi-vezde.to.digital", 51624))
-    response = f"{method}\r\n {res}\r\n\r\n".encode()
-    conn.send(response)
-    res = conn.recv(1024)
-    print(f"ОТВЕТ от ПАРТИИ: {res.decode()}")
-
-
-def checking_len_of_name(request: str) -> bool:
+def checking_len_of_name(name: str) -> bool:
     """Функция проверки длины имени пользователя"""
-    return len(request) >= 30
+    return len(name) <= 30
 
 
 def get_request(conn: str) -> str:
@@ -48,8 +54,12 @@ def parse_request(req: str) -> str:
         verbs.remove("РКСОК/1.0")
         verbs.pop(0)
         name = " ".join(verbs)
-        body_response = f"{metod} {name} {PROTOCOL}"
-    return body_response
+        if checking_len_of_name(name):
+            print(len(name))
+            body_response = f"{metod} {name} {PROTOCOL}"
+            return body_response
+        else:
+            print("НИПОНЯЛ")
 
 
 def parse_phone(phone_req: str) -> str:
