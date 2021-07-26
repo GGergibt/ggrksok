@@ -52,12 +52,13 @@ class RKSOKPhoneBook:
 
     def parse_phone_request(self, phone_req: str) -> str:
         """Функция для обработки номера телефона"""
+        # TODO Проверка длины имени, не отдает правильный ответ клиенту
         self._phone = "".join(filter(str.isdigit, phone_req))
         return self._phone
 
     def checking_len_of_name(self, name: str) -> bool:
         """Функция проверки длины имени пользователя"""
-        return len(name) <= 30
+        return len(self._name) <= 30
 
     def send_to_checking_server(self, res: str) -> str:
         """Функция для запроса на сервер проверки"""
@@ -78,7 +79,7 @@ class RKSOKPhoneBook:
                     response = f"{NOTFOUND} {PROTOCOL}\r\n\r\n".encode()
                 return response
             elif self._method == "ЗОПИШИ":
-                with open(f"phonebook/{self._name}.txt", "w+") as file:
+                with open(f"phonebook/{self._name}.txt", "w") as file:
                     file.write(self._phone)
                 response = f"{OK} {PROTOCOL}\r\n\r\n".encode()
                 return response
