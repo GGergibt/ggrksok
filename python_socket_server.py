@@ -3,6 +3,10 @@ import socket
 PROTOCOL = "РКСОК/1.0"
 
 METOD = ("ОТДОВАЙ", "ЗОПИШИ", "УДОЛИ")
+OK = "НОРМАЛДЫКС"
+NOTFOUND = "НИНАШОЛ"
+NOT_APPROVED = "НИЛЬЗЯ"
+INCORRECT_REQUEST = "НИПОНЯЛ"
 
 
 def send_to_checking_server(res: str) -> str:
@@ -11,20 +15,21 @@ def send_to_checking_server(res: str) -> str:
     response = f"{method}\r\n {res}\r\n\r\n".encode()
     conn.send(response)
     res = conn.recv(1024).decode()
-    parse_response_check_server(res)
+    print(res)
+    permit = parse_response_check_server(res)
+    return permit
 
 
 def parse_response_check_server(res: str):
     if res.startswith("МОЖНА"):
-        print("МОЖНО")
+        return True
     else:
-        print("НЕЛЬЗЯ")
+        return False
 
 
 def send_response(conn: str, response: str):
     """Функция для отправки ответа клиенту"""
-    response_hard = "НОРМАЛДЫКС РКСОК/1.0".encode()
-    conn.sendall(response_hard)
+    conn.sendall(response)
 
 
 def checking_len_of_name(name: str) -> bool:
@@ -55,11 +60,11 @@ def parse_request(req: str) -> str:
         verbs.pop(0)
         name = " ".join(verbs)
         if checking_len_of_name(name):
-            print(len(name))
             body_response = f"{metod} {name} {PROTOCOL}"
             return body_response
         else:
-            print("НИПОНЯЛ")
+            response = f"{INCORRECT_REQUEST} {PROTOCOL}"
+            return response
 
 
 def parse_phone(phone_req: str) -> str:
@@ -81,8 +86,16 @@ def run_server():
         conn, addr = server.accept()
         while True:
             res = get_request(conn)
-            send_to_checking_server(res)
-            send_response(conn, res)
+            if res.startswith(INCORRECT_REQUEST):
+                send_response(conn, res.encode())
+            else:
+                permit = send_to_checking_server(res)
+                if permit:
+                    response = "НОРМАЛДЫКС РКСОК/1.0".encode()
+                    send_response(conn, response)
+                else:
+                    response = "НИЛЬЗЯ РКСОК/1.0\nУже едем".encode()
+                send_response(conn, response)
             conn.close()
             break
     server.close()
