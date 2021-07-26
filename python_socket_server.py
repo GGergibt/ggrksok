@@ -1,4 +1,5 @@
 import socket
+from pathlib import Path
 
 PROTOCOL = "РКСОК/1.0"
 
@@ -8,19 +9,23 @@ NOTFOUND = "НИНАШОЛ"
 NOT_APPROVED = "НИЛЬЗЯ"
 INCORRECT_REQUEST = "НИПОНЯЛ"
 
+name = ""
+phone_response = ""
 
-def send_to_checking_server(res: str) -> str:
+
+def send_to_checking_server(res: str) -> bool:
+    """Функция для запроса на сервер проверки"""
     method = "АМОЖНА? РКСОК/1.0"
     conn = socket.create_connection(("vragi-vezde.to.digital", 51624))
-    response = f"{method}\r\n {res}\r\n\r\n".encode()
-    conn.send(response)
-    res = conn.recv(1024).decode()
-    print(res)
-    permit = parse_response_check_server(res)
-    return permit
+    request = f"{method}\r\n {res}\r\n\r\n".encode()
+    conn.send(request)
+    res_vragi = conn.recv(1024).decode()
+    permit = parse_response_check_server(res_vragi)
+    return permit, res_vragi
 
 
-def parse_response_check_server(res: str):
+def parse_response_check_server(res: str) -> bool:
+    """Функция для проверки МОЖНО или НИЛЬЗЯ"""
     if res.startswith("МОЖНА"):
         return True
     else:
@@ -39,21 +44,23 @@ def checking_len_of_name(name: str) -> bool:
 
 def get_request(conn: str) -> str:
     """Функция для обработки запроса от клиента"""
+    global phone_response
     raw_request = conn.recv(1024).decode()
     body_request = [x for x in raw_request.split("\r\n") if len(x) > 0]
     if len(body_request) > 1:
-        body_response = parse_request(body_request[0])
+        body_response, name = parse_request(body_request[0])
         phone_response = parse_phone(body_request[-1])
         response = f"{body_response}\r\n{phone_response}"
         return response
     else:
-        body_response = parse_request(body_request[0])
-        return body_response
+        response = parse_request(body_request[0])
+        return response
 
 
 def parse_request(req: str) -> str:
     """Функция для обработки запроса и получения имени пользователя и если есть телефона"""
     if req.startswith(tuple(METOD)):
+        global name
         verbs = req.split()
         metod = verbs[0]
         verbs.remove("РКСОК/1.0")
@@ -61,7 +68,8 @@ def parse_request(req: str) -> str:
         name = " ".join(verbs)
         if checking_len_of_name(name):
             body_response = f"{metod} {name} {PROTOCOL}"
-            return body_response
+            return body_response, name
+
         else:
             response = f"{INCORRECT_REQUEST} {PROTOCOL}"
             return response
@@ -86,16 +94,39 @@ def run_server():
         conn, addr = server.accept()
         while True:
             res = get_request(conn)
-            if res.startswith(INCORRECT_REQUEST):
+            if res[0].startswith(INCORRECT_REQUEST):
                 send_response(conn, res.encode())
             else:
-                permit = send_to_checking_server(res)
+                permit, req_vragi = send_to_checking_server(res)
                 if permit:
-                    response = "НОРМАЛДЫКС РКСОК/1.0".encode()
-                    send_response(conn, response)
+                    print(res)
+                    if "ЗОПИШИ" in res:
+                        with open(f"phonebook/{name}.txt", "w+") as file:
+                            file.write(phone_response)
+                        response = f"НОРМАЛДЫКС РКСОК/1.0\r\n\r\n".encode()
+                        send_response(conn, response)
+                    elif "УДОЛИ" in res[0]:
+                        path = Path(f"phonebook/{name}.txt")
+                        if path.exists():
+                            path.unlink()
+                            response = f"НОРМАЛДЫКС РКСОК/1.0\r\n\r\n".encode()
+                            send_response(conn, response)
+
+                        else:
+                            response = f"НИНАШОЛ РКСОК/1.0\r\n\r\n".encode()
+                            send_response(conn, response)
+
+                    elif "ОТДОВАЙ" in res[0]:
+                        path = Path(f"phonebook/{name}.txt")
+                        if path.exists():
+                            with path.open() as f:
+                                phone = "".join(f.readlines())
+                                print(phone)
+                        response = f"НОРМАЛДЫКС РКСОК/1.0\r\n{phone}\r\n\r\n".encode()
+                        send_response(conn, response)
                 else:
-                    response = "НИЛЬЗЯ РКСОК/1.0\nУже едем".encode()
-                send_response(conn, response)
+                    response = req_vragi.encode()
+                    send_response(conn, response)
             conn.close()
             break
     server.close()
