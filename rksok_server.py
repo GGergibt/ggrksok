@@ -58,14 +58,14 @@ class RKSOKPhoneBook:
                 raw_response = f"{INCORRECT_REQUEST} {PROTOCOL}"
             return raw_response
 
+    def checking_len_of_name(self, name: str) -> bool:
+        """Функция проверки длины имени пользователя"""
+        return len(self._name) <= 30
+
     def parse_phone_request(self, phone_req: str) -> str:
         """Функция для обработки номера телефона"""
         self._phone = "".join(filter(str.isdigit, phone_req))
         return self._phone
-
-    def checking_len_of_name(self, name: str) -> bool:
-        """Функция проверки длины имени пользователя"""
-        return len(self._name) <= 30
 
     def send_to_checking_server(self, res: str) -> str:
         """Функция для запроса на сервер проверки"""
@@ -75,19 +75,31 @@ class RKSOKPhoneBook:
         conn.send(request)
         res_vragi = conn.recv(1024).decode()
         if self.parse_response_check_server(res_vragi):
-            if self._method == "ОТДОВАЙ":
-                response = self.get_phonebook()
-                return response
-            elif self._method == "ЗОПИШИ":
-                response = self.write_phonebook()
-                return response
-            elif self._method == "УДОЛИ":
-                response = self.delete_phonebook()
-                return response
-            else:
-                return f"{INCORRECT_REQUEST} {PROTOCOL}\r\n\r\n".encode()
+            response = self.work_phonebook(res_vragi)
+            return response
         else:
             return f"{res_vragi}".encode()
+
+    def parse_response_check_server(self, res_vragi: str) -> bool:
+        """Функция для проверки МОЖНО или НИЛЬЗЯ"""
+        if res_vragi.startswith("МОЖНА"):
+            return True
+        else:
+            return False
+
+    def work_phonebook(self, res_vragi: str):
+        """Функция для работы с телефонной книгой"""
+        if self._method == "ОТДОВАЙ":
+            response = self.get_phonebook()
+            return response
+        elif self._method == "ЗОПИШИ":
+            response = self.write_phonebook()
+            return response
+        elif self._method == "УДОЛИ":
+            response = self.delete_phonebook()
+            return response
+        else:
+            return f"{INCORRECT_REQUEST} {PROTOCOL}\r\n\r\n".encode()
 
     def get_phonebook(self):
         """Функция проверяет наличие файла и если он есть отдает номер телефона"""
@@ -116,13 +128,6 @@ class RKSOKPhoneBook:
         else:
             response = f"{NOTFOUND} {PROTOCOL}\r\n\r\n".encode()
         return response
-
-    def parse_response_check_server(self, res_vragi: str) -> bool:
-        """Функция для проверки МОЖНО или НИЛЬЗЯ"""
-        if res_vragi.startswith("МОЖНА"):
-            return True
-        else:
-            return False
 
 
 def run_server():
