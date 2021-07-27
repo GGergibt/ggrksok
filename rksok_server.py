@@ -21,7 +21,12 @@ class RKSOKPhoneBook:
         """Функция для обработки запроса от клиента"""
         raw_request = self._conn.recv(1024).decode()
         body_request = [x for x in raw_request.split("\r\n") if len(x) > 0]
-        response_client = self.compile_response(body_request)
+        if body_request[0].startswith(tuple(METOD)):
+            response_client = self.compile_response(body_request)
+        else:
+            response_client = f"{INCORRECT_REQUEST} {PROTOCOL}\r\n\r\n".encode()
+        print(f"ЗАПРОС: {raw_request}")
+        print(f"ОТВЕТ: {response_client.decode()}")
         return self._conn.send(response_client)
 
     def compile_response(self, res):
@@ -33,7 +38,10 @@ class RKSOKPhoneBook:
         else:
             response = self.parse_body_request(res[0])
 
-        response_client = self.send_to_checking_server(response)
+        if response.startswith(INCORRECT_REQUEST):
+            response_client = f"{INCORRECT_REQUEST} {PROTOCOL}".encode()
+        else:
+            response_client = self.send_to_checking_server(response)
         return response_client
 
     def parse_body_request(self, req: str) -> str:
@@ -52,7 +60,6 @@ class RKSOKPhoneBook:
 
     def parse_phone_request(self, phone_req: str) -> str:
         """Функция для обработки номера телефона"""
-        # TODO Проверка длины имени, не отдает правильный ответ клиенту
         self._phone = "".join(filter(str.isdigit, phone_req))
         return self._phone
 
@@ -63,38 +70,52 @@ class RKSOKPhoneBook:
     def send_to_checking_server(self, res: str) -> str:
         """Функция для запроса на сервер проверки"""
         method = "АМОЖНА? РКСОК/1.0"
-        print(res)
         conn = socket.create_connection(("vragi-vezde.to.digital", 51624))
         request = f"{method}\r\n {res}\r\n\r\n".encode()
         conn.send(request)
         res_vragi = conn.recv(1024).decode()
         if self.parse_response_check_server(res_vragi):
             if self._method == "ОТДОВАЙ":
-                path = Path(f"phonebook/{self._name}.txt")
-                if path.exists():
-                    with path.open() as f:
-                        phone = "".join(f.readlines())
-                    response = f"{OK} {PROTOCOL}\r\n{phone}\r\n\r\n".encode()
-                else:
-                    response = f"{NOTFOUND} {PROTOCOL}\r\n\r\n".encode()
+                response = self.get_phonebook()
                 return response
             elif self._method == "ЗОПИШИ":
-                with open(f"phonebook/{self._name}.txt", "w") as file:
-                    file.write(self._phone)
-                response = f"{OK} {PROTOCOL}\r\n\r\n".encode()
+                response = self.write_phonebook()
                 return response
             elif self._method == "УДОЛИ":
-                path = Path(f"phonebook/{self._name}.txt")
-                if path.exists():
-                    path.unlink()
-                    response = f"{OK} {PROTOCOL}\r\n\r\n".encode()
-                else:
-                    response = f"{NOTFOUND} {PROTOCOL}\r\n\r\n".encode()
+                response = self.delete_phonebook()
                 return response
             else:
                 return f"{INCORRECT_REQUEST} {PROTOCOL}\r\n\r\n".encode()
         else:
             return f"{res_vragi}".encode()
+
+    def get_phonebook(self):
+        """Функция проверяет наличие файла и если он есть отдает номер телефона"""
+        path = Path(f"phonebook/{self._name}.txt")
+        if path.exists():
+            with path.open() as f:
+                phone = "".join(f.readlines())
+            response = f"{OK} {PROTOCOL}\r\n{phone}\r\n\r\n".encode()
+        else:
+            response = f"{NOTFOUND} {PROTOCOL}\r\n\r\n".encode()
+        return response
+
+    def write_phonebook(self):
+        """Функция  создает файла по имени и записывает номер телефона"""
+        with open(f"phonebook/{self._name}.txt", "w") as file:
+            file.write(self._phone)
+        response = f"{OK} {PROTOCOL}\r\n\r\n".encode()
+        return response
+
+    def delete_phonebook(self):
+        """Функция удаляет файл по имени"""
+        path = Path(f"phonebook/{self._name}.txt")
+        if path.exists():
+            path.unlink()
+            response = f"{OK} {PROTOCOL}\r\n\r\n".encode()
+        else:
+            response = f"{NOTFOUND} {PROTOCOL}\r\n\r\n".encode()
+        return response
 
     def parse_response_check_server(self, res_vragi: str) -> bool:
         """Функция для проверки МОЖНО или НИЛЬЗЯ"""
