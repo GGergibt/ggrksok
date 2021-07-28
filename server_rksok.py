@@ -160,25 +160,31 @@ class RKSOKPhoneBook:
 
 def run_server():
     """Функция для запуска сервера РКСОК"""
-    server = socket.create_server(("0.0.0.0", 50007))
-    server.listen(1)
-    while True:
-        conn, addr = server.accept()
-        print("Главный цикл")
+    try:
+        server = socket.create_server(("0.0.0.0", 50007))
+        server.listen(1)
         while True:
-            try:
-                client = RKSOKPhoneBook(conn)
-                client.get_request()
-                conn.close()
-                break
-            except:
-                raw_request = conn.recv(1024).decode()
-                response_client = f"{INCORRECT_REQUEST} {PROTOCOL}\r\n\r\n".encode()
-                conn.send(response_client)
-                print("Could not connect to websocket server ...", response_client.decode())
-                conn.close()
-                break
-    server.close()
+            conn, addr = server.accept()
+            print("Главный цикл")
+            while True:
+                try:
+                    client = RKSOKPhoneBook(conn)
+                    client.get_request()
+                    conn.close()
+                    break
+                except:
+                    raw_request = conn.recv(1024).decode()
+                    response_client = f"{INCORRECT_REQUEST} {PROTOCOL}\r\n\r\n".encode()
+                    conn.send(response_client)
+                    print(
+                        "Could not connect to websocket server ...",
+                        response_client.decode(),
+                    )
+                    conn.close()
+                    break
+    except KeyboardInterrupt:
+        server.close()
+        print("Выключение сервера")
 
 
 if __name__ == "__main__":
