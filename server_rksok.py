@@ -24,7 +24,7 @@ class RKSOKPhoneBook:
         if body_request[0].startswith(tuple(METOD)):
             response_client = self.compile_response(body_request)
         else:
-            response_client = f"{INCORRECT_REQUEST} {PROTOCOL}\r\n\r\n".encode()
+            response_client = f"{INCORRECT_REQUEST} {PROTOCOL}\r\n\r\n".encode("utf8")
         print(f"ЗАПРОС: {raw_request}")
         print(f"ОТВЕТ: {response_client.decode()}")
         return self._conn.send(response_client)
@@ -48,15 +48,43 @@ class RKSOKPhoneBook:
         """Функция для обработки запроса и получения имени пользователя и если есть телефона"""
         if req.startswith(tuple(METOD)):
             verbs = req.split()
-            self._method = verbs[0]
-            verbs.remove(PROTOCOL)
-            verbs.pop(0)
-            self._name = " ".join(verbs)
-            if self.checking_len_of_name(self._name):
-                raw_response = f"{self._method} {self._name} {PROTOCOL}"
-            else:
+            try:
+                verbs.remove(PROTOCOL)
+                if verbs[0] == "ОТДОВАЙ":
+                    self._method = verbs[0]
+                    verbs.pop(0)
+                    self._name = " ".join(verbs)
+                    if self.checking_len_of_name(self._name):
+                        raw_response = f"{self._method} {self._name} {PROTOCOL}"
+                        return raw_response
+                    else:
+                        raw_response = f"{INCORRECT_REQUEST} {PROTOCOL}"
+                elif verbs[0] == "УДОЛИ":
+                    self._method = verbs[0]
+                    verbs.pop(0)
+                    self._name = " ".join(verbs)
+                    if self.checking_len_of_name(self._name):
+                        raw_response = f"{self._method} {self._name} {PROTOCOL}"
+                        return raw_response
+                    else:
+                        raw_response = f"{INCORRECT_REQUEST} {PROTOCOL}"
+                elif verbs[0] == "ЗОПИШИ":
+                    self._method = verbs[0]
+                    verbs.pop(0)
+                    self._name = " ".join(verbs)
+                    if self.checking_len_of_name(self._name):
+                        raw_response = f"{self._method} {self._name} {PROTOCOL}"
+                        return raw_response
+                    else:
+                        raw_response = f"{INCORRECT_REQUEST} {PROTOCOL}"
+                else:
+                    print("НЕ ОТДАВАЙ!!!")
+                    raw_response = f"{INCORRECT_REQUEST} {PROTOCOL}"
+
+                return raw_response
+            except:
                 raw_response = f"{INCORRECT_REQUEST} {PROTOCOL}"
-            return raw_response
+                return raw_response
 
     def checking_len_of_name(self, name: str) -> bool:
         """Функция проверки длины имени пользователя"""
@@ -132,16 +160,24 @@ class RKSOKPhoneBook:
 
 def run_server():
     """Функция для запуска сервера РКСОК"""
-    server = socket.create_server(("localhost", 5000))
+    server = socket.create_server(("0.0.0.0", 50007))
     server.listen(1)
     while True:
         conn, addr = server.accept()
         print("Главный цикл")
         while True:
-            client = RKSOKPhoneBook(conn)
-            client.get_request()
-            conn.close()
-            break
+            try:
+                client = RKSOKPhoneBook(conn)
+                client.get_request()
+                conn.close()
+                break
+            except:
+                raw_request = conn.recv(1024).decode()
+                response_client = f"{INCORRECT_REQUEST} {PROTOCOL}\r\n\r\n".encode()
+                conn.send(response_client)
+                print("Could not connect to websocket server ...", response_client.decode())
+                conn.close()
+                break
     server.close()
 
 
