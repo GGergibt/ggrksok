@@ -17,24 +17,42 @@ class RKSOKPhoneBook:
         self._conn = conn
         self._name, self._phone, self._verb, self._method = None, None, None, None
 
-    def get_request(self):
+    def recvall(self):
+        BUFF_SIZE = 1024
+        data = b''
+        while True:
+            part = self._conn.recv(BUFF_SIZE)
+            print(f"Часть запроса: {part.decode()}")
+            data += part
+            if len(part) < 1024:
+                break
+        end = b"\r\n\r\n"
+        if end in data:
+            res_cl = self.get_request(data)
+        else:
+            res_cl = f"{INCORRECT_REQUEST} {PROTOCOL}\r\n\r\n".encode()
+        return res_cl
+            
+
+    def get_request(self, msg):
         """Функция для обработки запроса от клиента"""
-        raw_request = self._conn.recv(1024).decode()
+        raw_request = msg.decode()
         body_request = [x for x in raw_request.split("\r\n") if len(x) > 0]
         if body_request[0].startswith(tuple(METOD)):
             response_client = self.compile_response(body_request)
         else:
-            response_client = f"{INCORRECT_REQUEST} {PROTOCOL}\r\n\r\n".encode("utf8")
-        print(f"ЗАПРОС: {raw_request}")
-        print(f"ОТВЕТ: {response_client.decode()}")
-        return self._conn.send(response_client)
+            response_client = f"{INCORRECT_REQUEST} {PROTOCOL}\r\n\r\n".encode()
+        # print(f"ЗАПРОС: {raw_request}")
+        # print(f"ОТВЕТ: {response_client.decode()}")
+        return response_client
 
     def compile_response(self, res):
         """Функция собирает ответ для клиента"""
         if len(res) > 1:
             body_response = self.parse_body_request(res[0])
-            self.parse_phone_request(res[-1])
+            self.parse_phone_request(res[1::])
             response = f"{body_response}\r\n{self._phone}"
+            print(response)
         else:
             response = self.parse_body_request(res[0])
 
@@ -48,51 +66,44 @@ class RKSOKPhoneBook:
         """Функция для обработки запроса и получения имени пользователя и если есть телефона"""
         if req.startswith(tuple(METOD)):
             verbs = req.split()
-            try:
-                verbs.remove(PROTOCOL)
-                if verbs[0] == "ОТДОВАЙ":
-                    self._method = verbs[0]
-                    verbs.pop(0)
-                    self._name = " ".join(verbs)
-                    if self.checking_len_of_name(self._name):
-                        raw_response = f"{self._method} {self._name} {PROTOCOL}"
-                        return raw_response
-                    else:
-                        raw_response = f"{INCORRECT_REQUEST} {PROTOCOL}"
-                elif verbs[0] == "УДОЛИ":
-                    self._method = verbs[0]
-                    verbs.pop(0)
-                    self._name = " ".join(verbs)
-                    if self.checking_len_of_name(self._name):
-                        raw_response = f"{self._method} {self._name} {PROTOCOL}"
-                        return raw_response
-                    else:
-                        raw_response = f"{INCORRECT_REQUEST} {PROTOCOL}"
-                elif verbs[0] == "ЗОПИШИ":
-                    self._method = verbs[0]
-                    verbs.pop(0)
-                    self._name = " ".join(verbs)
-                    if self.checking_len_of_name(self._name):
-                        raw_response = f"{self._method} {self._name} {PROTOCOL}"
-                        return raw_response
-                    else:
-                        raw_response = f"{INCORRECT_REQUEST} {PROTOCOL}"
+            verbs.remove(PROTOCOL)
+            if verbs[0] == "ОТДОВАЙ":
+                self._method = verbs[0]
+                verbs.pop(0)
+                self._name = " ".join(verbs)
+                if self.checking_len_of_name(self._name):
+                    raw_response = f"{self._method} {self._name} {PROTOCOL}"
                 else:
-                    print("НЕ ОТДАВАЙ!!!")
                     raw_response = f"{INCORRECT_REQUEST} {PROTOCOL}"
-
-                return raw_response
-            except:
-                raw_response = f"{INCORRECT_REQUEST} {PROTOCOL}"
-                return raw_response
+            elif verbs[0] == "УДОЛИ":
+                self._method = verbs[0]
+                verbs.pop(0)
+                self._name = " ".join(verbs)
+                if self.checking_len_of_name(self._name):
+                    raw_response = f"{self._method} {self._name} {PROTOCOL}"
+                else:
+                    raw_response = f"{INCORRECT_REQUEST} {PROTOCOL}"
+            elif verbs[0] == "ЗОПИШИ":
+                self._method = verbs[0]
+                verbs.pop(0)
+                self._name = " ".join(verbs)
+                if self.checking_len_of_name(self._name):
+                    raw_response = f"{self._method} {self._name} {PROTOCOL}"
+                else:
+                    raw_response = f"{INCORRECT_REQUEST} {PROTOCOL}"
+        else:
+            print("НЕ ОТДАВАЙ!!!")
+            raw_response = f"{INCORRECT_REQUEST} {PROTOCOL}"
+        return raw_response
 
     def checking_len_of_name(self, name: str) -> bool:
         """Функция проверки длины имени пользователя"""
-        return len(self._name) <= 30
+        return len(self._name) <= 30 and len(name) != 0
 
     def parse_phone_request(self, phone_req: str) -> str:
         """Функция для обработки номера телефона"""
-        self._phone = "".join(filter(str.isdigit, phone_req))
+        self._phone = phone_req
+        # self._phone = "".join(filter(str.isdigit, phone_req))
         return self._phone
 
     def send_to_checking_server(self, res: str) -> str:
@@ -143,7 +154,7 @@ class RKSOKPhoneBook:
     def write_phonebook(self):
         """Функция  создает файла по имени и записывает номер телефона"""
         with open(f"phonebook/{self._name}.txt", "w") as file:
-            file.write(self._phone)
+            file.writelines(self._phone)
         response = f"{OK} {PROTOCOL}\r\n\r\n".encode()
         return response
 
@@ -169,19 +180,16 @@ def run_server():
             while True:
                 try:
                     client = RKSOKPhoneBook(conn)
-                    client.get_request()
-                    conn.close()
+                    msg = client.recvall()
+                    conn.send(msg)
                     break
                 except:
-                    raw_request = conn.recv(1024).decode()
-                    response_client = f"{INCORRECT_REQUEST} {PROTOCOL}\r\n\r\n".encode()
-                    conn.send(response_client)
-                    print(
-                        "Could not connect to websocket server ...",
-                        response_client.decode(),
-                    )
+                    neponyal = f"НИПОНЯЛ РКСОК/1.0\r\n\r\n".encode()
+                    conn.send(neponyal)
                     conn.close()
                     break
+
+            # conn.close()
     except KeyboardInterrupt:
         server.close()
         print("Выключение сервера")
