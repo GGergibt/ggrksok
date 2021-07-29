@@ -19,40 +19,36 @@ class RKSOKPhoneBook:
 
     def recvall(self):
         BUFF_SIZE = 1024
-        data = b''
+        data = b""
         while True:
             part = self._conn.recv(BUFF_SIZE)
-            print(f"Часть запроса: {part.decode()}")
+            # print(f"Часть запроса: {part.decode()}")
             data += part
             if len(part) < 1024:
                 break
+        msg = self.raw_request(data)
+        return msg
+
+    def raw_request(self, data):
         end = b"\r\n\r\n"
         if end in data:
-            res_cl = self.get_request(data)
+            data = self.get_request(data.decode())
         else:
-            res_cl = f"{INCORRECT_REQUEST} {PROTOCOL}\r\n\r\n".encode()
-        return res_cl
-            
+            data = f"{INCORRECT_REQUEST} {PROTOCOL}\r\n\r\n".encode()
+        return data
 
     def get_request(self, msg):
         """Функция для обработки запроса от клиента"""
-        raw_request = msg.decode()
-        body_request = [x for x in raw_request.split("\r\n") if len(x) > 0]
-        if body_request[0].startswith(tuple(METOD)):
-            response_client = self.compile_response(body_request)
-        else:
-            response_client = f"{INCORRECT_REQUEST} {PROTOCOL}\r\n\r\n".encode()
-        # print(f"ЗАПРОС: {raw_request}")
-        # print(f"ОТВЕТ: {response_client.decode()}")
+        request = [x for x in msg.split("\r\n") if len(x) > 0]
+        response_client = self.compile_response(request)
         return response_client
 
     def compile_response(self, res):
         """Функция собирает ответ для клиента"""
         if len(res) > 1:
             body_response = self.parse_body_request(res[0])
-            self.parse_phone_request(res[1::])
+            self._phone = res[1::]
             response = f"{body_response}\r\n{self._phone}"
-            print(response)
         else:
             response = self.parse_body_request(res[0])
 
@@ -63,48 +59,33 @@ class RKSOKPhoneBook:
         return response_client
 
     def parse_body_request(self, req: str) -> str:
-        """Функция для обработки запроса и получения имени пользователя и если есть телефона"""
-        if req.startswith(tuple(METOD)):
-            verbs = req.split()
-            verbs.remove(PROTOCOL)
-            if verbs[0] == "ОТДОВАЙ":
-                self._method = verbs[0]
-                verbs.pop(0)
-                self._name = " ".join(verbs)
-                if self.checking_len_of_name(self._name):
-                    raw_response = f"{self._method} {self._name} {PROTOCOL}"
-                else:
-                    raw_response = f"{INCORRECT_REQUEST} {PROTOCOL}"
-            elif verbs[0] == "УДОЛИ":
-                self._method = verbs[0]
-                verbs.pop(0)
-                self._name = " ".join(verbs)
-                if self.checking_len_of_name(self._name):
-                    raw_response = f"{self._method} {self._name} {PROTOCOL}"
-                else:
-                    raw_response = f"{INCORRECT_REQUEST} {PROTOCOL}"
-            elif verbs[0] == "ЗОПИШИ":
-                self._method = verbs[0]
-                verbs.pop(0)
-                self._name = " ".join(verbs)
-                if self.checking_len_of_name(self._name):
-                    raw_response = f"{self._method} {self._name} {PROTOCOL}"
-                else:
-                    raw_response = f"{INCORRECT_REQUEST} {PROTOCOL}"
+        """Функция для получения метода и имени пользователя"""
+        verbs = req.split()
+        verbs.remove(PROTOCOL)
+        if self.get_method(verbs[0]):
+            verbs.pop(0)
+            if self.get_name(verbs):
+                raw_response = f"{self._method} {self._name} {PROTOCOL}"
         else:
-            print("НЕ ОТДАВАЙ!!!")
             raw_response = f"{INCORRECT_REQUEST} {PROTOCOL}"
         return raw_response
 
+    def get_method(self, method):
+        """Функция проверяет корректность метода РКСОК"""
+        if method in METOD:
+            self._method = method
+            return self._method
+
+    def get_name(self, verbs):
+        """Функция проверяет имя пользователя"""
+        name = " ".join(verbs)
+        if self.checking_len_of_name(name):
+            self._name = name
+            return self._name
+
     def checking_len_of_name(self, name: str) -> bool:
         """Функция проверки длины имени пользователя"""
-        return len(self._name) <= 30 and len(name) != 0
-
-    def parse_phone_request(self, phone_req: str) -> str:
-        """Функция для обработки номера телефона"""
-        self._phone = phone_req
-        # self._phone = "".join(filter(str.isdigit, phone_req))
-        return self._phone
+        return len(name) <= 30 and len(name) != 0
 
     def send_to_checking_server(self, res: str) -> str:
         """Функция для запроса на сервер проверки"""
@@ -172,7 +153,7 @@ class RKSOKPhoneBook:
 def run_server():
     """Функция для запуска сервера РКСОК"""
     try:
-        server = socket.create_server(("0.0.0.0", 50007))
+        server = socket.create_server(("localhost", 50007))
         server.listen(1)
         while True:
             conn, addr = server.accept()
@@ -182,6 +163,7 @@ def run_server():
                     client = RKSOKPhoneBook(conn)
                     msg = client.recvall()
                     conn.send(msg)
+                    conn.close()
                     break
                 except:
                     neponyal = f"НИПОНЯЛ РКСОК/1.0\r\n\r\n".encode()
