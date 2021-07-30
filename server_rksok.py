@@ -22,7 +22,6 @@ def recvall(conn):
         data += part
 
         if len(part) < BUFF_SIZE:
-            # either 0 or end of data
             break
     return data
 
@@ -41,8 +40,8 @@ class RKSOKPhoneBook:
     def get_request(self, msg):
         """Функция для обработки запроса от клиента"""
         request = [x for x in msg.split("\r\n") if len(x) > 0]
-        self.response = self.compile_response(request)
-        return self.response
+        msg = self.compile_response(request)
+        return msg
 
     def compile_response(self, res):
         """Функция собирает ответ для клиента"""
@@ -57,6 +56,9 @@ class RKSOKPhoneBook:
         return self.response
 
     def _raw_response(self, response: str) -> str:
+        if response.startswith("НИПОНЯЛ"):
+            raw_response = f"{INCORRECT_REQUEST} {PROTOCOL}\r\n\r\n".encode()
+            return raw_response
         response_client = self.send_to_checking_server(response)
         return response_client
 
@@ -66,9 +68,9 @@ class RKSOKPhoneBook:
         if verbs[-1] == PROTOCOL and self.get_method(verbs[0]):
             verbs.remove(PROTOCOL)
             verbs.pop(0)
-        if self.get_name(verbs[0]):
-            raw_response = f"{self._method} {self._name} {PROTOCOL}"
-            return raw_response
+            if self.get_name(verbs[0]):
+                raw_response = f"{self._method} {self._name} {PROTOCOL}"
+                return raw_response
         else:
             raw_response = f"{INCORRECT_REQUEST} {PROTOCOL}"
             return raw_response
@@ -106,7 +108,10 @@ class RKSOKPhoneBook:
     def response_processing(self, res_vragi: str) -> str:
         if self.parse_response_check_server(res_vragi):
             if self.work_phonebook():
-                response = f"{OK} {PROTOCOL}\r\n{self._phone}\r\n\r\n".encode()
+                if self._method == "ОТДОВАЙ":
+                    response = f"{OK} {PROTOCOL}\r\n{self._phone}\r\n\r\n".encode()
+                else:
+                    response = f"{OK} {PROTOCOL}\r\n\r\n".encode()
             else:
                 response = f"{NOTFOUND} {PROTOCOL}\r\n\r\n".encode()
             return response
