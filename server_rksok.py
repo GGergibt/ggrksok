@@ -9,33 +9,29 @@ NOTFOUND = "НИНАШОЛ"
 NOT_APPROVED = "НИЛЬЗЯ"
 INCORRECT_REQUEST = "НИПОНЯЛ"
 
+def recvall(conn):
+    BUFF_SIZE = 1024
+    data = b''
+    while True:
+        part = conn.recv(BUFF_SIZE)
+        print(f"Часть запроса: {part.decode()}")
+        data += part
+        
+        if len(part) < BUFF_SIZE :
+            # either 0 or end of data
+            break
+    return data
 
 class RKSOKPhoneBook:
     """Phonebook working with RKSOK server."""
 
-    def __init__(self, conn: str):
-        self._conn = conn
-        self._name, self._phone, self._verb, self._method = None, None, None, None
+    def __init__(self):
+        self._name, self._phone, self._method = None, None, None
 
-    def recvall(self):
-        BUFF_SIZE = 1024
-        data = b""
-        while True:
-            part = self._conn.recv(BUFF_SIZE)
-            # print(f"Часть запроса: {part.decode()}")
-            data += part
-            if len(part) < 1024:
-                break
-        msg = self.raw_request(data)
-        return msg
 
     def raw_request(self, data):
-        end = b"\r\n\r\n"
-        if end in data:
-            data = self.get_request(data.decode())
-        else:
-            data = f"{INCORRECT_REQUEST} {PROTOCOL}\r\n\r\n".encode()
-        return data
+        msg = self.get_request(data.decode())
+        return msg
 
     def get_request(self, msg):
         """Функция для обработки запроса от клиента"""
@@ -52,23 +48,22 @@ class RKSOKPhoneBook:
         else:
             response = self.parse_body_request(res[0])
 
-        if response.startswith(INCORRECT_REQUEST):
-            response_client = f"{INCORRECT_REQUEST} {PROTOCOL}".encode()
-        else:
-            response_client = self.send_to_checking_server(response)
+        response_client = self.send_to_checking_server(response)
         return response_client
 
     def parse_body_request(self, req: str) -> str:
         """Функция для получения метода и имени пользователя"""
         verbs = req.split()
-        verbs.remove(PROTOCOL)
-        if self.get_method(verbs[0]):
-            verbs.pop(0)
-            if self.get_name(verbs):
-                raw_response = f"{self._method} {self._name} {PROTOCOL}"
+        if verbs[-1] == PROTOCOL:
+            verbs.remove(PROTOCOL)
+            if self.get_method(verbs[0]):
+                verbs.pop(0)
+                if self.get_name(verbs[0]):
+                    raw_response = f"{self._method} {self._name} {PROTOCOL}"
+                    return raw_response
         else:
-            raw_response = f"{INCORRECT_REQUEST} {PROTOCOL}"
-        return raw_response
+            raw_response =  f"{INCORRECT_REQUEST} {PROTOCOL}"
+            return raw_response
 
     def get_method(self, method):
         """Функция проверяет корректность метода РКСОК"""
@@ -78,7 +73,7 @@ class RKSOKPhoneBook:
 
     def get_name(self, verbs):
         """Функция проверяет имя пользователя"""
-        name = " ".join(verbs)
+        name = "".join(verbs)
         if self.checking_len_of_name(name):
             self._name = name
             return self._name
@@ -153,25 +148,25 @@ class RKSOKPhoneBook:
 def run_server():
     """Функция для запуска сервера РКСОК"""
     try:
-        server = socket.create_server(("localhost", 50007))
+        server = socket.create_server(("0.0.0.0", 50007))
         server.listen(1)
         while True:
             conn, addr = server.accept()
             print("Главный цикл")
             while True:
-                try:
-                    client = RKSOKPhoneBook(conn)
-                    msg = client.recvall()
+                data = recvall(conn)
+                end = b"\r\n\r\n"
+                if end in data:
+                    client = RKSOKPhoneBook()
+                    msg = client.raw_request(data)
                     conn.send(msg)
                     conn.close()
                     break
-                except:
-                    neponyal = f"НИПОНЯЛ РКСОК/1.0\r\n\r\n".encode()
-                    conn.send(neponyal)
+                else:
+                    response = f"{INCORRECT_REQUEST} {PROTOCOL}\r\n\r\n".encode()
+                    conn.send(response)
                     conn.close()
                     break
-
-            # conn.close()
     except KeyboardInterrupt:
         server.close()
         print("Выключение сервера")
