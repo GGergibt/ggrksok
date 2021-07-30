@@ -1,5 +1,8 @@
 import socket
+import sys
 from pathlib import Path
+from utils import get_phonebook, write_phonebook, delete_phonebook
+
 
 PROTOCOL = "РКСОК/1.0"
 
@@ -9,25 +12,27 @@ NOTFOUND = "НИНАШОЛ"
 NOT_APPROVED = "НИЛЬЗЯ"
 INCORRECT_REQUEST = "НИПОНЯЛ"
 
+
 def recvall(conn):
     BUFF_SIZE = 1024
-    data = b''
+    data = b""
     while True:
         part = conn.recv(BUFF_SIZE)
-        print(f"Часть запроса: {part.decode()}")
+        print(sys.getsizeof(part))
         data += part
-        
-        if len(part) < BUFF_SIZE :
+
+        if len(part) < BUFF_SIZE:
             # either 0 or end of data
             break
     return data
+
 
 class RKSOKPhoneBook:
     """Phonebook working with RKSOK server."""
 
     def __init__(self):
         self._name, self._phone, self._method = None, None, None
-
+        self.response = None
 
     def raw_request(self, data):
         msg = self.get_request(data.decode())
@@ -36,42 +41,45 @@ class RKSOKPhoneBook:
     def get_request(self, msg):
         """Функция для обработки запроса от клиента"""
         request = [x for x in msg.split("\r\n") if len(x) > 0]
-        response_client = self.compile_response(request)
-        return response_client
+        self.response = self.compile_response(request)
+        return self.response
 
     def compile_response(self, res):
         """Функция собирает ответ для клиента"""
         if len(res) > 1:
             body_response = self.parse_body_request(res[0])
             self._phone = res[1::]
-            response = f"{body_response}\r\n{self._phone}"
+            raw_response = f"{body_response}\r\n{self._phone}"
+            self.response = self._raw_response(raw_response)
         else:
-            response = self.parse_body_request(res[0])
+            raw_response = self.parse_body_request(res[0])
+            self.response = self._raw_response(raw_response)
+        return self.response
 
+    def _raw_response(self, response: str) -> str:
         response_client = self.send_to_checking_server(response)
         return response_client
 
     def parse_body_request(self, req: str) -> str:
         """Функция для получения метода и имени пользователя"""
         verbs = req.split()
-        if verbs[-1] == PROTOCOL:
+        if verbs[-1] == PROTOCOL and self.get_method(verbs[0]):
             verbs.remove(PROTOCOL)
-            if self.get_method(verbs[0]):
-                verbs.pop(0)
-                if self.get_name(verbs[0]):
-                    raw_response = f"{self._method} {self._name} {PROTOCOL}"
-                    return raw_response
+            verbs.pop(0)
+        if self.get_name(verbs[0]):
+            raw_response = f"{self._method} {self._name} {PROTOCOL}"
+            return raw_response
         else:
-            raw_response =  f"{INCORRECT_REQUEST} {PROTOCOL}"
+            raw_response = f"{INCORRECT_REQUEST} {PROTOCOL}"
             return raw_response
 
-    def get_method(self, method):
+    def get_method(self, method: str) -> str:
         """Функция проверяет корректность метода РКСОК"""
         if method in METOD:
             self._method = method
             return self._method
 
-    def get_name(self, verbs):
+    def get_name(self, verbs) -> str:
         """Функция проверяет имя пользователя"""
         name = "".join(verbs)
         if self.checking_len_of_name(name):
@@ -85,12 +93,22 @@ class RKSOKPhoneBook:
     def send_to_checking_server(self, res: str) -> str:
         """Функция для запроса на сервер проверки"""
         method = "АМОЖНА? РКСОК/1.0"
-        conn = socket.create_connection(("vragi-vezde.to.digital", 51624))
-        request = f"{method}\r\n {res}\r\n\r\n".encode()
-        conn.send(request)
-        res_vragi = conn.recv(1024).decode()
+        try:
+            conn = socket.create_connection(("vragi-vezde.to.digital", 51624))
+            request = f"{method}\r\n {res}\r\n\r\n".encode()
+            conn.send(request)
+            res_vragi = conn.recv(1024).decode()
+            respon = self.response_processing(res_vragi)
+            return respon
+        except:
+            print("Партия занята и не может ответить на твои глупые запросы")
+
+    def response_processing(self, res_vragi: str) -> str:
         if self.parse_response_check_server(res_vragi):
-            response = self.work_phonebook(res_vragi)
+            if self.work_phonebook():
+                response = f"{OK} {PROTOCOL}\r\n{self._phone}\r\n\r\n".encode()
+            else:
+                response = f"{NOTFOUND} {PROTOCOL}\r\n\r\n".encode()
             return response
         else:
             return f"{res_vragi}".encode()
@@ -99,56 +117,26 @@ class RKSOKPhoneBook:
         """Функция для проверки МОЖНО или НИЛЬЗЯ"""
         if res_vragi.startswith("МОЖНА"):
             return True
-        else:
-            return False
 
-    def work_phonebook(self, res_vragi: str):
+    def work_phonebook(self) -> bool:
         """Функция для работы с телефонной книгой"""
         if self._method == "ОТДОВАЙ":
-            response = self.get_phonebook()
-            return response
+            phone = get_phonebook(self._name)
+            if phone:
+                self._phone = phone
+                return True
         elif self._method == "ЗОПИШИ":
-            response = self.write_phonebook()
-            return response
+            if write_phonebook(self._name, self._phone):
+                return True
         elif self._method == "УДОЛИ":
-            response = self.delete_phonebook()
-            return response
-        else:
-            return f"{INCORRECT_REQUEST} {PROTOCOL}\r\n\r\n".encode()
-
-    def get_phonebook(self):
-        """Функция проверяет наличие файла и если он есть отдает номер телефона"""
-        path = Path(f"phonebook/{self._name}.txt")
-        if path.exists():
-            with path.open() as f:
-                phone = "".join(f.readlines())
-            response = f"{OK} {PROTOCOL}\r\n{phone}\r\n\r\n".encode()
-        else:
-            response = f"{NOTFOUND} {PROTOCOL}\r\n\r\n".encode()
-        return response
-
-    def write_phonebook(self):
-        """Функция  создает файла по имени и записывает номер телефона"""
-        with open(f"phonebook/{self._name}.txt", "w") as file:
-            file.writelines(self._phone)
-        response = f"{OK} {PROTOCOL}\r\n\r\n".encode()
-        return response
-
-    def delete_phonebook(self):
-        """Функция удаляет файл по имени"""
-        path = Path(f"phonebook/{self._name}.txt")
-        if path.exists():
-            path.unlink()
-            response = f"{OK} {PROTOCOL}\r\n\r\n".encode()
-        else:
-            response = f"{NOTFOUND} {PROTOCOL}\r\n\r\n".encode()
-        return response
+            if delete_phonebook(self._name):
+                return True
 
 
 def run_server():
     """Функция для запуска сервера РКСОК"""
     try:
-        server = socket.create_server(("0.0.0.0", 50007))
+        server = socket.create_server(("", 50007))
         server.listen(1)
         while True:
             conn, addr = server.accept()
