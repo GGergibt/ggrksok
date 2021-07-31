@@ -4,10 +4,10 @@ import sys
 import threading
 import socketserver
 from utils import get_phonebook, write_phonebook, delete_phonebook
-from loguru import logger
+# from loguru import logger
 
 
-logger.add("debug.log", format="{time} {level} {message}", level="DEBUG")
+# logger.add("debug.log", format="{time} {level} {message}", level="DEBUG")
 
 
 PROTOCOL = "РКСОК/1.0"
@@ -29,7 +29,7 @@ class RKSOKPhoneBook:
 
     def raw_request(self, data):
         msg = self.get_request(data)
-        logger.debug(f"Запрос: {data}\nОТВЕТ: {msg.decode()}")
+        # logger.debug(f"Запрос: {data}\nОТВЕТ: {msg.decode()}")
         return msg
 
     def get_request(self, msg):
@@ -135,6 +135,8 @@ class RKSOKPhoneBook:
             if delete_phonebook(self._name):
                 return True
 
+class ThreadedTCPServer(socketserver.ThreadingMixIn, socketserver.TCPServer):
+    pass
 
 class ThreadedTCPRequestHandler(socketserver.BaseRequestHandler):
     def recvall(self):
@@ -155,21 +157,16 @@ class ThreadedTCPRequestHandler(socketserver.BaseRequestHandler):
         response = client.raw_request(data)
         self.request.sendall(response)
 
-class ThreadedTCPServer(socketserver.ThreadingMixIn, socketserver.TCPServer):
-    pass
 
 
 if __name__ == "__main__":
     HOST, PORT = "", 50007
-    try:
-        server = ThreadedTCPServer((HOST, PORT), ThreadedTCPRequestHandler)
-        with server:
-            ip, port = server.server_address
-            server_thread = threading.Thread(target=server.serve_forever)
-            server_thread.daemon = True
-            server_thread.start()
-            print("Server loop running in thread:", server_thread.name)
+    server = ThreadedTCPServer((HOST, PORT), ThreadedTCPRequestHandler)
+    with server:
+        ip, port = server.server_address
+        server_thread = threading.Thread(target=server.serve_forever)
+        server_thread.daemon = True
+        server_thread.start()
+        print("Server loop running in thread:", server_thread.name)
 
-            server.serve_forever()
-    except KeyboardInterrupt:
-        print("Shutdown Server")
+        server.serve_forever()
