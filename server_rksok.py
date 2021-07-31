@@ -92,20 +92,20 @@ class RKSOKPhoneBook:
         """Функция проверки длины имени пользователя"""
         return len(name) <= 30 and len(name) != 0
 
-    def send_to_checking_server(self, res: str) -> str:
+    def send_to_checking_server(self, enquiry: str) -> str:
         """Функция для запроса на сервер проверки"""
         method = "АМОЖНА? РКСОК/1.0"
         try:
             conn = socket.create_connection(("vragi-vezde.to.digital", 51624))
-            request = f"{method}\r\n {res}\r\n\r\n".encode()
+            request = f"{method}\r\n {enquiry}\r\n\r\n".encode()
             conn.send(request)
-            res_vragi = conn.recv(1024).decode()
-            respon = self.response_processing(res_vragi)
+            official_response = conn.recv(1024).decode()
+            respon = self.response_processing(official_response)
             return respon
         except:
             print("Партия занята и не может ответить на твои глупые запросы")
 
-    def response_processing(self, res_vragi: str) -> str:
+
         if self.parse_response_check_server(res_vragi):
             if self.work_phonebook():
                 if self._method == "ОТДОВАЙ":

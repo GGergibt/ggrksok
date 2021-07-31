@@ -14,25 +14,13 @@ NOT_APPROVED = "НИЛЬЗЯ"
 INCORRECT_REQUEST = "НИПОНЯЛ"
 
 
-def recvall(conn):
-    BUFF_SIZE = 1024
-    data = b""
-    while True:
-        part = conn.recv(BUFF_SIZE)
-        print(sys.getsizeof(part))
-        data += part
-
-        if len(part) < BUFF_SIZE:
-            break
-    return data
-
-
 class RKSOKPhoneBook:
     """Phonebook working with RKSOK server."""
 
     def __init__(self):
         self._name, self._phone, self._method = None, None, None
         self.response = None
+
 
     def raw_request(self, data):
         msg = self.get_request(data.decode())
@@ -52,12 +40,15 @@ class RKSOKPhoneBook:
             raw_response = f"{body_response}\r\n{self._phone}"
             self.response = self._raw_response(raw_response)
         else:
-            raw_response = self.parse_body_request(res[0])
-            self.response = self._raw_response(raw_response)
+            try:
+                raw_response = self.parse_body_request(res[0])
+                self.response = self._raw_response(raw_response)
+            except IndexError as e:
+               pass
         return self.response
 
     def _raw_response(self, response: str) -> str:
-        if response.startswith("НИПОНЯЛ"):
+        if response.startswith(INCORRECT_REQUEST):
             raw_response = f"{INCORRECT_REQUEST} {PROTOCOL}\r\n\r\n".encode()
             return raw_response
         response_client = self.send_to_checking_server(response)
@@ -93,21 +84,21 @@ class RKSOKPhoneBook:
         """Функция проверки длины имени пользователя"""
         return len(name) <= 30 and len(name) != 0
 
-    def send_to_checking_server(self, res: str) -> str:
+    def send_to_checking_server(self, enquiry: str) -> str:
         """Функция для запроса на сервер проверки"""
         method = "АМОЖНА? РКСОК/1.0"
         try:
             conn = socket.create_connection(("vragi-vezde.to.digital", 51624))
-            request = f"{method}\r\n {res}\r\n\r\n".encode()
+            request = f"{method}\r\n {enquiry}\r\n\r\n".encode()
             conn.send(request)
-            res_vragi = conn.recv(1024).decode()
-            respon = self.response_processing(res_vragi)
+            official_response = conn.recv(1024).decode()
+            respon = self.response_processing(official_response)
             return respon
         except:
             print("Партия занята и не может ответить на твои глупые запросы")
 
-    def response_processing(self, res_vragi: str) -> str:
-        if self.parse_response_check_server(res_vragi):
+    def response_processing(self, official_response: str) -> str:
+        if self.parse_response_check_server(official_response):
             if self.work_phonebook():
                 if self._method == "ОТДОВАЙ":
                     response = f"{OK} {PROTOCOL}\r\n{self._phone}\r\n\r\n".encode()
@@ -117,11 +108,11 @@ class RKSOKPhoneBook:
                 response = f"{NOTFOUND} {PROTOCOL}\r\n\r\n".encode()
             return response
         else:
-            return f"{res_vragi}".encode()
+            return f"{official_response}".encode()
 
-    def parse_response_check_server(self, res_vragi: str) -> bool:
+    def parse_response_check_server(self, official_response: str) -> bool:
         """Функция для проверки МОЖНО или НИЛЬЗЯ"""
-        if res_vragi.startswith("МОЖНА"):
+        if official_response.startswith("МОЖНА"):
             return True
 
     def work_phonebook(self) -> bool:
@@ -140,14 +131,28 @@ class RKSOKPhoneBook:
 
 
 class ThreadedTCPRequestHandler(socketserver.BaseRequestHandler):
-    def handle(self):
-        data = self.request.recv(1024)
-        cur_thread = threading.current_thread()
-        client = RKSOKPhoneBook()
-        response = client.raw_request(data)
-        # response = f"{cur_thread.name}, {data}".encode()
-        self.request.sendall(response)
+    def recvall(self):
+        BUFF_SIZE = 1024
+        data = b""
+        ring = set()
+        while True:
+            part = self.request.recv(BUFF_SIZE)
+            print(sys.getsizeof(part))
+            data += part
 
+            if len(part) < BUFF_SIZE:
+                break
+        return data
+
+    def handle(self):
+        data = self.recvall()
+        end = b"\r\n\r\n"
+        if end in data:
+            cur_thread = threading.current_thread()
+            print(cur_thread)
+            client = RKSOKPhoneBook()
+            response = client.raw_request(data)
+            self.request.sendall(response)
 
 class ThreadedTCPServer(socketserver.ThreadingMixIn, socketserver.TCPServer):
     pass
@@ -155,14 +160,15 @@ class ThreadedTCPServer(socketserver.ThreadingMixIn, socketserver.TCPServer):
 
 if __name__ == "__main__":
     HOST, PORT = "", 50007
+    try:
+        server = ThreadedTCPServer((HOST, PORT), ThreadedTCPRequestHandler)
+        with server:
+            ip, port = server.server_address
+            server_thread = threading.Thread(target=server.serve_forever)
+            server_thread.daemon = True
+            server_thread.start()
+            print("Server loop running in thread:", server_thread.name)
 
-    server = ThreadedTCPServer((HOST, PORT), ThreadedTCPRequestHandler)
-    with server:
-        ip, port = server.server_address
-        server_thread = threading.Thread(target=server.serve_forever)
-        # Exit the server thread when the main thread terminates
-        server_thread.daemon = True
-        server_thread.start()
-        print("Server loop running in thread:", server_thread.name)
-
-        server.serve_forever()
+            server.serve_forever()
+    except KeyboardInterrupt:
+        print("Shutdown Server")
