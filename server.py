@@ -1,8 +1,13 @@
+#!/home/www/code/ggrksok/venv/bin/python
 import socket
 import sys
 import threading
 import socketserver
 from utils import get_phonebook, write_phonebook, delete_phonebook
+from loguru import logger
+
+
+logger.add("debug.log", format="{time} {level} {message}", level="DEBUG")
 
 
 PROTOCOL = "РКСОК/1.0"
@@ -23,7 +28,8 @@ class RKSOKPhoneBook:
 
 
     def raw_request(self, data):
-        msg = self.get_request(data.decode())
+        msg = self.get_request(data)
+        logger.debug(f"Запрос: {data}\nОТВЕТ: {msg.decode()}")
         return msg
 
     def get_request(self, msg):
@@ -132,27 +138,22 @@ class RKSOKPhoneBook:
 
 class ThreadedTCPRequestHandler(socketserver.BaseRequestHandler):
     def recvall(self):
-        BUFF_SIZE = 1024
-        data = b""
-        ring = set()
+        BUFF_SIZE = 2048
+        data = ""
         while True:
-            part = self.request.recv(BUFF_SIZE)
-            print(sys.getsizeof(part))
+            part = self.request.recv(BUFF_SIZE).decode()
             data += part
-
-            if len(part) < BUFF_SIZE:
+            end = "\r\n\r\n"
+            if part.endswith(end):
                 break
         return data
 
     def handle(self):
         data = self.recvall()
-        end = b"\r\n\r\n"
-        if end in data:
-            cur_thread = threading.current_thread()
-            print(cur_thread)
-            client = RKSOKPhoneBook()
-            response = client.raw_request(data)
-            self.request.sendall(response)
+        cur_thread = threading.current_thread()
+        client = RKSOKPhoneBook()
+        response = client.raw_request(data)
+        self.request.sendall(response)
 
 class ThreadedTCPServer(socketserver.ThreadingMixIn, socketserver.TCPServer):
     pass

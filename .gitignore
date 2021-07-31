@@ -11,3 +11,4 @@ env/
 venv/
 
 phonebook/*
+debug.log
