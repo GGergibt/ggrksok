@@ -1,6 +1,3 @@
-import socket
-import threading
-import socketserver
 from utils import get_phonebook, write_phonebook, delete_phonebook
 from typing import List
 from request_to_party import send_to_checking_server

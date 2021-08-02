@@ -2,6 +2,7 @@ from pathlib import Path
 
 
 def checking_path():
+    """Creates a directory if one does not exist"""
     path = Path("phonebook")
     try:
         path.mkdir(parents=True, exist_ok=False)

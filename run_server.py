@@ -1,7 +1,7 @@
 import socket
 import threading
 import socketserver
-import server
+from RKSOKPhonebook import RKSOKPhoneBook
 
 
 class ThreadedTCPServer(socketserver.ThreadingMixIn, socketserver.TCPServer):
@@ -27,7 +27,7 @@ class ThreadedTCPRequestHandler(socketserver.BaseRequestHandler):
         """
         data = self.recvall()
         cur_thread = threading.current_thread()
-        client = server.RKSOKPhoneBook()
+        client = RKSOKPhoneBook()
         official_response = client.get_request(data)
         self.request.sendall(official_response)
 
