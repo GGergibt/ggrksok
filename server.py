@@ -3,7 +3,7 @@ import threading
 import socketserver
 from utils import get_phonebook, write_phonebook, delete_phonebook
 from typing import List
-
+from request_to_party import send_to_checking_server
 
 PROTOCOL = "РКСОК/1.0"
 
@@ -42,7 +42,7 @@ class RKSOKPhoneBook:
         if response.startswith(INCORRECT_REQUEST):
             raw_response = f"{INCORRECT_REQUEST} {PROTOCOL}\r\n\r\n".encode()
             return raw_response
-        response_client = self.send_to_checking_server(response)
+        response_client = self.response_processing(response)
         return response_client
 
     def parse_body_request(self, req: str) -> str:
@@ -75,37 +75,26 @@ class RKSOKPhoneBook:
         """Return True if name is correct"""
         return len(name) <= 30 and len(name) != 0
 
-    def send_to_checking_server(self, enquiry: str) -> str:
-        """Sends request to the serve checking"""
-        method = "АМОЖНА? РКСОК/1.0"
-        try:
-            conn = socket.create_connection(("vragi-vezde.to.digital", 51624))
-            request = f"{method}\r\n {enquiry}\r\n\r\n".encode()
-            conn.send(request)
-            official_response = conn.recv(1024).decode()
-            respon = self.response_processing(official_response)
-            return respon
-        except:
-            print("Партия занята и не может ответить на твои глупые запросы")
+    def response_processing(self, response: str) -> str:
+        """Collects response after party verification"""
+        official_response = send_to_checking_server(response)
+        if official_response == True:
+            message_to_client = self.phonebook_response()
+            return message_to_client
 
-    def response_processing(self, official_response: str) -> str:
-        """collets response after party verification"""
-        if self.parse_response_check_server(official_response):
-            if self.work_phonebook():
-                if self._method == "ОТДОВАЙ":
-                    response = f"{OK} {PROTOCOL}\r\n{self._phone}\r\n\r\n".encode()
-                else:
-                    response = f"{OK} {PROTOCOL}\r\n\r\n".encode()
-            else:
-                response = f"{NOTFOUND} {PROTOCOL}\r\n\r\n".encode()
-            return response
         else:
             return f"{official_response}".encode()
 
-    def parse_response_check_server(self, official_response: str) -> bool:
-        """Party verification of the request"""
-        if official_response.startswith("МОЖНА"):
-            return True
+    def phonebook_response(self) -> str:
+        """Generates response to client"""
+        if self.work_phonebook():
+            if self._method == "ОТДОВАЙ":
+                response = f"{OK} {PROTOCOL}\r\n{self._phone}\r\n\r\n".encode()
+            else:
+                response = f"{OK} {PROTOCOL}\r\n\r\n".encode()
+        else:
+            response = f"{NOTFOUND} {PROTOCOL}\r\n\r\n".encode()
+        return response
 
     def work_phonebook(self) -> bool:
         """Working with utils phonebook"""
@@ -120,49 +109,3 @@ class RKSOKPhoneBook:
         elif self._method == "УДОЛИ":
             if delete_phonebook(self._name):
                 return True
-
-
-class ThreadedTCPServer(socketserver.ThreadingMixIn, socketserver.TCPServer):
-    pass
-
-
-class ThreadedTCPRequestHandler(socketserver.BaseRequestHandler):
-    def recvall(self) -> str:
-        """Reading data from socket"""
-        BUFF_SIZE = 2048
-        data = ""
-        while True:
-            part = self.request.recv(BUFF_SIZE).decode()
-            data += part
-            end = "\r\n\r\n"
-            if part.endswith(end):
-                break
-        return data
-
-    def handle(self):
-        """Function getting request from user,
-        sends to the RKSOK class and returns the response to the user
-        """
-        data = self.recvall()
-        cur_thread = threading.current_thread()
-        client = RKSOKPhoneBook()
-        official_response = client.get_request(data)
-        self.request.sendall(official_response)
-
-
-def run_server():
-    """Start the server RKSOK"""
-    HOST, PORT = "", 50007
-    server = ThreadedTCPServer((HOST, PORT), ThreadedTCPRequestHandler)
-    with server:
-        ip, port = server.server_address
-        server_thread = threading.Thread(target=server.serve_forever)
-        server_thread.daemon = True
-        server_thread.start()
-        print("Server loop running in thread:", server_thread.name)
-
-        server.serve_forever()
-
-
-if __name__ == "__main__":
-    run_server()

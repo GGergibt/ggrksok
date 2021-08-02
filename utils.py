@@ -12,7 +12,7 @@ def checking_path():
 
 
 def get_phonebook(name):
-    """Функция проверяет наличие файла и если он есть отдает номер телефона"""
+    """Read user file"""
     checking_path()
     path = Path(f"phonebook/{name}.txt")
     if path.exists():
@@ -22,7 +22,7 @@ def get_phonebook(name):
 
 
 def write_phonebook(name, phone):
-    """Функция  создает файла по имени и записывает номер телефона"""
+    """Write user file"""
     checking_path()
     try:
         path = Path(f"phonebook/{name}.txt")
@@ -34,7 +34,7 @@ def write_phonebook(name, phone):
 
 
 def delete_phonebook(name):
-    """Функция удаляет файл по имени"""
+    """Delete user file"""
     checking_path()
     path = Path(f"phonebook/{name}.txt")
     if path.exists():
