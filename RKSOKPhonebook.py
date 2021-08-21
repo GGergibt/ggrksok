@@ -1,9 +1,10 @@
-from utils import get_phonebook, write_phonebook, delete_phonebook
 from typing import List
+from utils import get_phonebook, write_phonebook, delete_phonebook
+
 from request_to_party import send_to_checking_server
 
-PROTOCOL = "РКСОК/1.0"
 
+PROTOCOL = 'РКСОК/1.0'
 METHOD = ("ОТДОВАЙ", "ЗОПИШИ", "УДОЛИ")
 OK = "НОРМАЛДЫКС"
 NOTFOUND = "НИНАШОЛ"
