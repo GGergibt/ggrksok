@@ -1,50 +1,41 @@
-import socket
-import threading
-import socketserver
+import asyncio
 from RKSOKPhonebook import RKSOKPhoneBook
 
 
-class ThreadedTCPServer(socketserver.ThreadingMixIn, socketserver.TCPServer):
-    pass
+async def recvall(reader):
+    """Reading data from socket"""
+    data = b""
+    while True:
+        part = await reader.read(100)
+        data += part
+        end = b"\r\n\r\n"
+        if part.endswith(end):
+            break
+    return data
 
 
-class ThreadedTCPRequestHandler(socketserver.BaseRequestHandler):
-    def recvall(self) -> str:
-        """Reading data from socket"""
-        BUFF_SIZE = 2048
-        data = ""
-        while True:
-            part = self.request.recv(BUFF_SIZE).decode()
-            data += part
-            end = "\r\n\r\n"
-            if part.endswith(end):
-                break
-        return data
+async def handle_echo(reader, writer):
+    # data = await reader.read(100)
+    data = await recvall(reader)
+    message = data.decode()
+    client = RKSOKPhoneBook()
+    official_response = client.get_request(message)
 
-    def handle(self):
-        """Function getting request from user,
-        sends to the RKSOK class and returns the response to the user
-        """
-        data = self.recvall()
-        cur_thread = threading.current_thread()
-        client = RKSOKPhoneBook()
-        official_response = client.get_request(data)
-        self.request.sendall(official_response)
+    writer.write(official_response)
+    await writer.drain()
+
+    print("Close the connection")
+    writer.close()
 
 
-def run_server():
-    """Start the server RKSOK"""
-    HOST, PORT = "", 50007
-    server = ThreadedTCPServer((HOST, PORT), ThreadedTCPRequestHandler)
-    with server:
-        ip, port = server.server_address
-        server_thread = threading.Thread(target=server.serve_forever)
-        server_thread.daemon = True
-        server_thread.start()
-        print("Server loop running in thread:", server_thread.name)
+async def main():
+    server = await asyncio.start_server(handle_echo, "127.0.0.1", 50007)
 
-        server.serve_forever()
+    addr = server.sockets[0].getsockname()
+    print(f"Serving on {addr}")
+
+    async with server:
+        await server.serve_forever()
 
 
-if __name__ == "__main__":
-    run_server()
+asyncio.run(main())
